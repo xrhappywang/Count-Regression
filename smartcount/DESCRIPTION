@@ -1,0 +1,22 @@
+Package: smartcount
+Title: A Toolkit for Count Regression Analysis
+Version: 0.1.0
+Authors@R:
+    person("Xinran", "Wang", , "xinranwang@example.com", role = c("aut", "cre"))
+Description: A statistical toolkit for count regression analysis. Provides
+    functions to summarize count data, fit Poisson, Quasi-Poisson, Negative
+    Binomial, and Zero-Inflated regression models, assess model conditions,
+    produce diagnostic plots, and interpret model output in clear terms.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Imports:
+    MASS,
+    pscl,
+    stats,
+    ggplot2,
+    AER
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
