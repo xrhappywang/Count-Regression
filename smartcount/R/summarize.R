@@ -1,11 +1,11 @@
 #' Summarize Count Data
 #'
-#' @param data A data frame.
-#' @param response A character string naming the response variable.
+#' @param data data frame
+#' @param response response variable
 #'
-#' @return A list with summary statistics.
+#' @return summary statistics
 #' @export
-summarize_count <- function(data, response) {
+summarize_count_data <- function(data, response) {
   y <- data[[response]]
   y <- y[!is.na(y)]
 

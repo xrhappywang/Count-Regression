@@ -1,10 +1,10 @@
 #' Fit a Count Regression Model
 #'
-#' @param data A data frame.
-#' @param formula A formula (e.g., y ~ x1 + x2).
-#' @param model A character string specifying model type.
+#' @param data data frame
+#' @param formula formula
+#' @param model specifying model type
 #'
-#' @return A fitted model object.
+#' @return fitted model
 #' @export
 fit_count <- function(data, formula, model = "poisson") {
   stats::glm(formula, data = data, family = poisson(link = "log"))

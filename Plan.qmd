@@ -1,0 +1,6 @@
+```{r}
+# 1. summary statistics
+# 2. fit model 从poisson开始，先fit model再check condition，然后quasi poisson，zero-inflated， 最后做negative binomial
+
+
+```
