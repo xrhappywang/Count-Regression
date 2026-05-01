@@ -21,7 +21,8 @@ Imports:
     patchwork,
     DHARMa,
     emmeans,
-    lmtest
+    lmtest,
+    glmmTMB
 Suggests:
     knitr,
     rmarkdown,

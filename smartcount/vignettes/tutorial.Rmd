@@ -47,16 +47,138 @@ fit_p <- fit_count(bioChemists, art~ fem + mar + kid5 + phd + ment,
 # Check Conditions
 ```{r}
 check_conditions(fit_p)
-
 ```
 
 # Try fit ZIP based on suggestions
 
-# Evaluate and Comapre Models
+The Poisson check above suggested that the data may have overdispersion and/or zero inflation. We try a Zero-Inflated Poisson (ZIP) model to better 
+handle the excess zeros.
+
+```{r}
+fit_zip <- fit_count(bioChemists, art ~ fem + mar + kid5 + phd + ment, 
+                     model = "zip")
+check_conditions(fit_zip)
+```
+
+
+# Evaluate and Compare Models
+
+We use `evaluate_model()` to look at fit statistics. AIC and BIC measure
+relative fit quality (lower is better).
+
+```{r}
+evaluate_model(fit_p)$stats
+evaluate_model(fit_zip)$stats
+```
+
+To compare the two models directly, we pass both into `evaluate_model()`.
+Since one model is zero-inflated and the other is not, the function
+automatically uses the **Vuong test** for non-nested comparison.
+
+```{r}
+comparison <- evaluate_model(fit_p, fit_zip)
+comparison$comparison
+```
+
+A negative Vuong z-statistic indicates that the second model (ZIP) is
+preferred over the first (Poisson).
+
 
 # Interpret Final Model
 
+We use `interpret()` to translate the ZIP coefficients into clear,
+non-technical language. The output table includes:
+
+- `estimated_log`: coefficient on the log scale
+- `estimated_exp`: exponentiated coefficient (rate ratio or odds ratio)
+- `percentage`: percent change in expected count
+- `ci_lower_pct` / `ci_upper_pct`: 95% confidence interval (percent scale)
+- `z_value` / `p_value`: hypothesis test statistics
+- `interpretation`: plain-English interpretation
+
+```{r}
+result <- interpret(fit_zip)
+result[, c("variable", "percentage", "ci_lower_pct", "ci_upper_pct", "p_value")]
+```
+
+The full interpretation column:
+
+```{r}
+result$interpretation
+```
+
+ZIP coefficients are split into two parts:
+
+- `count_xxx`: how the predictor affects the expected count among
+  non-structural-zero observations
+- `zero_xxx`: how the predictor affects the log-odds of being a
+  structural zero (i.e., someone who never publishes)
+
+
+# Extension: Generalized Poisson with Real Data
+
+Beyond the standard count regression models, `smartcount` also supports
+Generalized Poisson regression, which is more flexible than Poisson when
+the data exhibit overdispersion (or, less commonly, underdispersion).
+
+To demonstrate, we replicate the analysis from Akter et al. (2025),
+*"Accounting for overdispersion in skilled antenatal care: Identifying
+determinants using Bangladesh Demographic and Health Survey 2022 data"*
+(PLOS ONE). The authors use a Generalized Poisson model to study factors
+influencing the number of skilled antenatal care visits among 3,839
+Bangladeshi women.
+
+```{r}
+df <- read.csv("../data-raw/bangladesh_anc.csv")
+
+fit_gp <- fit_count(
+  df,
+  ANC_skilled ~ Mothers_Edu + Wealth_index + Media_Exposed,
+  model = "genpois"
+)
+
+check_conditions(fit_gp)
+```
+
+The Pearson dispersion ratio close to 1 confirms that the Generalized
+Poisson model handles the overdispersion well.
+
+```{r}
+interpret(fit_gp)
+```
+
+```{r}
+evaluate_model(fit_gp)$stats
+```
+
+
 # Conclusion
+
+The `smartcount` package provides an end-to-end workflow for count
+regression analysis:
+
+1. **Summarize** the data to understand its structure
+2. **Fit** a starting Poisson model
+3. **Check** the model's conditions
+4. **Switch** to a more appropriate model if needed (Quasi-Poisson,
+   Negative Binomial, ZIP, ZINB, or Generalized Poisson)
+5. **Evaluate** model fit and compare alternatives
+6. **Interpret** results in plain language
+
+This integrated workflow saves users from manually stitching together
+functions from different packages and applies appropriate diagnostic and
+interpretation logic for each model type.
+
+
+# References
+
+- Akter et al. (2025). Accounting for overdispersion in skilled antenatal
+  care: Identifying determinants using Bangladesh Demographic and Health
+  Survey 2022 data. *PLOS ONE*.
+  https://doi.org/10.1371/journal.pone.0346258
+
+- Long, J. S. (1990). The origins of sex differences in science.
+  *Social Forces*, 68(4), 1297-1316. (`bioChemists` dataset)
 
 
 

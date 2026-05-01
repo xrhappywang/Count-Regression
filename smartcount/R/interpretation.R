@@ -13,7 +13,9 @@ interpret<- function(fit){
   }
 
   # main interpretation
-  result <- if (inherits(fit, "zeroinfl")) {
+  result <- if (inherits(fit, "glmmTMB")) {
+    interpret_glmmTMB(fit)
+  } else if (inherits(fit, "zeroinfl")) {
     interpret_zip(fit)
   } else {
     interpret_glm(fit)
@@ -163,9 +165,36 @@ interpret_glm <- function(fit){
 }
 
 interpret_zip <- function(fit){
+  # check if model has offset (only on count part for ZIP)
+  has_offset <- !is.null(fit$offset) && length(fit$offset[[1]]) > 0
+
   # on original scale
   coef <- coef(fit) #coefficients on log scale
-  ci <-confint(fit) # 95% confidence interval on log scale
+  ci <- confint(fit) # 95% confidence interval on log scale
+
+  # extract z-values and p-values from summary
+  sum_obj <- summary(fit)$coefficients
+  count_table <- sum_obj$count
+  zero_table <- sum_obj$zero
+  z_values <- c(count_table[, "z value"], zero_table[, "z value"])
+  p_values <- c(count_table[, "Pr(>|z|)"], zero_table[, "Pr(>|z|)"])
+  names(z_values) <- names(coef)
+  names(p_values) <- names(coef)
+
+  # count predictors in each part (excluding intercept)
+  count_n_predictors <- sum(grepl("^count_", names(coef)) & !grepl("Intercept", names(coef)))
+  zero_n_predictors <- sum(grepl("^zero_", names(coef)) & !grepl("Intercept", names(coef)))
+
+  adjustment_count <- if (count_n_predictors > 1) {
+    ", adjusting for simultaneous linear change in other count-part predictors."
+  } else {
+    "."
+  }
+  adjustment_zero <- if (zero_n_predictors > 1) {
+    ", adjusting for simultaneous linear change in other zero-part predictors."
+  } else {
+    "."
+  }
 
   #exponentiate
   rate <- exp(coef)
@@ -176,7 +205,7 @@ interpret_zip <- function(fit){
   pct_lower <- 100*(ci_exp[,1]-1)
   pct_upper <- 100*(ci_exp[,2]-1)
 
-  interpretations<- character(length(coef))
+  interpretations <- character(length(coef))
 
   for (i in 1:length(coef)){
     variable <- names(coef)[i]
@@ -184,35 +213,67 @@ interpret_zip <- function(fit){
     is_count <- grepl("^count_", variable)
     is_zero <- grepl("^zero_", variable)
 
-    variable_clean <- gsub("^count_|^zero_", "", variable) 
-    
+    variable_clean <- gsub("^count_|^zero_", "", variable)
+
     percentage <- round(pct_change[i],3)
     lower <- round(pct_lower[i],3)
     upper <- round(pct_upper[i],3)
-  
 
     log_odds <- round(coef[i],3)
     odds_ratio <- round(rate[i],3)
 
     # if the variable is an intercept
-    if (variable_clean =="(Intercept)"){
+    if (variable_clean == "(Intercept)"){
       if (is_count){
-        interpretations[i] <- paste("The expected count is ", odds_ratio, "for observations that are not structural zeros, when all continuous predictors are zero and all categorical predictors are at their reference level.")
-      }else if(is_zero){
-        interpretations[i] <- paste("The log odds of being a structural zero is ", log_odds, "when all continuous predictors are zero and all categorical predictors are at their reference level.")
+        if (has_offset) {
+          interpretations[i] <- paste(
+            "The expected rate per unit of offset is", odds_ratio,
+            "for observations that are not structural zeros, when all continuous predictors are zero and all categorical predictors are at their reference level."
+          )
+        } else {
+          interpretations[i] <- paste(
+            "The expected count is", odds_ratio,
+            "for observations that are not structural zeros, when all continuous predictors are zero and all categorical predictors are at their reference level."
+          )
+        }
+      } else if (is_zero){
+        interpretations[i] <- paste(
+          "The log odds of being a structural zero is", log_odds,
+          "when all continuous predictors are zero and all categorical predictors are at their reference level."
+        )
       }
-    }else if (is_count){
-      interpretations[i] <- paste(
-        "For", variable_clean, ", the expected count changes by", percentage, "%", "(95% CI:", lower, "% to", upper, "%).")
-      
-    }else if(is_zero){
-      interpretations[i] <- paste(
-        "For", variable_clean, ", the log odds of being a structural zero changes by", log_odds,
-        "(odds ratio:", odds_ratio, ")."
+    } else if (is_count){
+      if (has_offset) {
+        interpretations[i] <- paste0(
+          paste(
+            "For", variable_clean,
+            ", the rate of events changes by", percentage, "%",
+            "(95% CI:", lower, "% to", upper, "%)"
+          ),
+          adjustment_count
+        )
+      } else {
+        interpretations[i] <- paste0(
+          paste(
+            "For", variable_clean,
+            ", the expected count changes by", percentage, "%",
+            "(95% CI:", lower, "% to", upper, "%)"
+          ),
+          adjustment_count
+        )
+      }
+    } else if (is_zero){
+      interpretations[i] <- paste0(
+        paste(
+          "For", variable_clean,
+          ", the log odds of being a structural zero changes by", log_odds,
+          "(odds ratio:", odds_ratio, ")"
+        ),
+        adjustment_zero
       )
     }
-    
   }
+
   result <- data.frame(
     variable = names(coef),
     estimated_log = round(coef, 3),
@@ -220,13 +281,82 @@ interpret_zip <- function(fit){
     percentage = round(pct_change, 3),
     ci_lower_pct = round(pct_lower, 3),
     ci_upper_pct = round(pct_upper, 3),
+    z_value = round(z_values, 3),
+    p_value = round(p_values, 4),
     interpretation = interpretations,
     row.names = NULL
   )
   result
+}
+
+# Interpret Generalized Poisson
+interpret_glmmTMB  <- function(fit){
+  # extract fixed effects (conditional model)
+  coef <- glmmTMB::fixef(fit)$cond
+
+  # confidence interval
+
+  ci <- confint(fit)
+  # matches the coefficient name (only first 2 columns: 2.5%, 97.5%)
+  ci <- ci[names(coef), 1:2, drop = FALSE]
+
+  # exponentiate
+  rate <- exp(coef)
+  ci_exp <- exp(ci)
+
+  # percentage change
+  pct_change <- 100 * (rate - 1)
+  pct_lower <- 100 * (ci_exp[, 1] - 1)
+  pct_upper <- 100 * (ci_exp[, 2] - 1)
+
+    # extract z-values and p-values from summary
+  sum_obj <- summary(fit)$coefficients$cond
+  z_values <- sum_obj[, "z value"]
+  p_values <- sum_obj[, "Pr(>|z|)"]
+
+  # build interpretation strings
+  interpretations <- character(length(coef))
+  for (i in 1:length(coef)) {
+    variable <- names(coef)[i]
+    pct <- round(pct_change[i], 3)
+    lo <- round(pct_lower[i], 3)
+    up <- round(pct_upper[i], 3)
+    baseline <- round(rate[i], 3)
+
+    if (variable == "(Intercept)") {
+      interpretations[i] <- paste(
+        "The expected count is", baseline,
+        "when all other predictors are zero."
+      )
+    } else {
+      interpretations[i] <- paste(
+        "For every one-unit increase in", variable,
+        ", the expected count changes by", pct, "%",
+        "(95% CI:", lo, "% to", up, "%)."
+      )
+    }
+  }
+
+  # build result data frame
+  data.frame(
+    variable = names(coef),
+    estimated_log = round(coef, 3),
+    estimated_exp = round(rate, 3),
+    percentage = round(pct_change, 3),
+    ci_lower_pct = round(pct_lower, 3),
+    ci_upper_pct = round(pct_upper, 3),
+    z_value = round(z_values, 3),
+    p_value = round(p_values, 4),
+    interpretation = interpretations,
+    row.names = NULL
+  )
+
 
 
 }
+
+
+
 
 # Helper function: interaction terms
 interpret_interaction <- function(fit){

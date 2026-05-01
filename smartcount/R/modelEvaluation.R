@@ -1,5 +1,32 @@
 # Helper: basic fit statistics
 model_stats <- function(fit) {
+
+  # Special case for zeroinfl: McFadden R^2 needs different handling
+  if (inherits(fit, "zeroinfl")) {
+    return(list(
+      AIC = AIC(fit),
+      BIC = BIC(fit),
+      logLik = as.numeric(logLik(fit)),
+      mcfadden_r2 = NA,
+      mcfadden_interpretation = "Not available for zero-inflated models",
+      deviance_r2 = NA,
+      deviance_interpretation = "Not available for zero-inflated models"
+    ))
+  }
+
+  # Special case for glmmTMB (e.g., Generalized Poisson)
+  if (inherits(fit, "glmmTMB")) {
+    return(list(
+      AIC = AIC(fit),
+      BIC = BIC(fit),
+      logLik = as.numeric(logLik(fit)),
+      mcfadden_r2 = NA,
+      mcfadden_interpretation = "Not available for glmmTMB models",
+      deviance_r2 = NA,
+      deviance_interpretation = "Not available for glmmTMB models"
+    ))
+  }
+
   basic <- list(
     AIC = AIC(fit),
     BIC = BIC(fit),
@@ -72,13 +99,31 @@ compareModel <- function(fit1, fit2) {
   is_zeroinfl2 <- inherits(fit2, "zeroinfl")
   is_negbin1 <- inherits(fit1, "negbin")
   is_negbin2 <- inherits(fit2, "negbin")
+  is_glmmTMB1 <- inherits(fit1, "glmmTMB")
+  is_glmmTMB2 <- inherits(fit2, "glmmTMB")
 
   # 1. ZIP/ZINB involved -> Vuong test (non-nested)
   if (is_zeroinfl1 || is_zeroinfl2) {
     return(pscl::vuong(fit1, fit2))
   }
 
-  # 2. Poisson vs NB -> likelihood ratio test with boundary correction
+  # 2. glmmTMB involved -> use anova (supports nested glmmTMB; for cross-class,
+  # use AIC comparison as fallback)
+  if (is_glmmTMB1 || is_glmmTMB2) {
+    return(tryCatch(
+      anova(fit1, fit2),
+      error = function(e) {
+        # fallback: simple AIC/BIC comparison
+        data.frame(
+          model = c(deparse(substitute(fit1)), deparse(substitute(fit2))),
+          AIC = c(AIC(fit1), AIC(fit2)),
+          BIC = c(BIC(fit1), BIC(fit2))
+        )
+      }
+    ))
+  }
+
+  # 3. Poisson vs NB -> likelihood ratio test with boundary correction
   if (xor(is_negbin1, is_negbin2)) {
     lrt <- lmtest::lrtest(fit1, fit2)
     # boundary correction: divide p-value by 2
@@ -87,7 +132,7 @@ compareModel <- function(fit1, fit2) {
     return(lrt)
   }
 
-  # 3. nested glm comparison (Poisson, Quasi-Poisson, NB)
+  # 4. nested glm comparison (Poisson, Quasi-Poisson, NB)
   family_name <- fit1$family$family
   if (!is.null(family_name) && family_name == "quasipoisson") {
     return(anova(fit1, fit2, test = "F"))

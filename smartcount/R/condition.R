@@ -50,7 +50,7 @@ check_overdispersion <- function(fit) {
   result <- list(
     pearson_ratio = pearson.ratio,
     diagnosis = diagnosis,
-    plot = p1 + p2
+    plot = patchwork::wrap_plots(p1, p2)
   )
   return(result)
 }
@@ -103,12 +103,6 @@ check_Multicollinearity <- function(fit){
 }
 
 
-#' Check Conditions for Count Regression
-#'
-#' @param fit a fitted model object
-#'
-#' @return diagnostic results based on model type
-#' @export
 check_poisson_conditions <- function(fit) {
   result <- NULL
   sample_size_check <- checkPoissonAssumptions(fit)
@@ -244,6 +238,12 @@ check_zeroinf_conditions <- function(fit){
   )
 }
 
+#' Check Conditions for Count Regression
+#'
+#' @param fit a fitted model object from fit_count()
+#'
+#' @return diagnostic results based on model type
+#' @export
 check_conditions <- function(fit){
   category <- attr(fit, "smartcount_model")
   if (is.null(category)){
@@ -258,8 +258,47 @@ check_conditions <- function(fit){
     result <- check_nb_conditions(fit)
   }else if (category=="zip"|| category=="zinb"){
     result <- check_zeroinf_conditions(fit)
+  }else if (category=="genpois"){
+    result <- check_genpois_conditions(fit)
   }
 
   result
 }
 
+check_genpois_conditions <- function(fit){
+  pearson_resid <- residuals(fit, type = "pearson")
+  pearson_ratio <- sum(pearson_resid^2) / df.residual(fit)
+
+  y <- model.frame(fit)[[1]]
+
+  total_events <- sum(y)
+  p <- length(glmmTMB::fixef(fit)$cond) 
+
+  threshold <- 10 * p
+  is_sufficient <- total_events >= threshold
+  
+  if (!is_sufficient) {
+    warning(paste0(
+      "Total events (", total_events, ") < 10 × predictors (", threshold, ")."
+    ))
+  }
+
+  diagnosis <- if (abs(pearson_ratio - 1) < 0.5) {
+    "Pearson ratio close to 1 — Generalized Poisson appears to handle the dispersion well."
+  } else {
+    paste0("Pearson ratio = ", round(pearson_ratio, 3), 
+           ". May indicate misspecification. Consider checking residual plots.")
+  }
+
+  list(
+    pearson_ratio = pearson_ratio,
+    diagnosis = diagnosis,
+    sample_size = list(
+      total_events = total_events,
+      n_predictors = p,
+      threshold = threshold,
+      is_sufficient = is_sufficient
+    )
+  )
+
+}
