@@ -1,0 +1,62 @@
+---
+title: "tutorial"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{tutorial}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(smartcount)
+```
+
+# Introduction
+The `smartcount` package provides a streamlined workflow for count regression analysis. 
+
+# Dataset
+We use `bioChemists` dataset from the `pscl` package, which records the number of articles published by 915 PhD biochemists.
+
+```{r}
+library(pscl)
+data("bioChemists")
+head(bioChemists)
+```
+
+# Summarize Data
+## Before fitting model, we examine whether the data user provides is a data frame and whether the response variable exists
+```{r}
+summarize_count_data(bioChemists, "art")
+
+```
+
+# Fit a Poisson Model
+## We start with a Poisson regression
+```{r}
+fit_p <- fit_count(bioChemists, art~ fem + mar + kid5 + phd + ment, 
+              model="poisson")
+```
+
+# Check Conditions
+```{r}
+check_conditions(fit_p)
+
+```
+
+# Try fit ZIP based on suggestions
+
+# Evaluate and Comapre Models
+
+# Interpret Final Model
+
+# Conclusion
+
+
+

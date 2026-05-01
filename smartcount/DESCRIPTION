@@ -16,7 +16,13 @@ Imports:
     pscl,
     stats,
     ggplot2,
-    AER
+    AER,
+    tibble,
+    patchwork,
+    DHARMa
 Suggests:
+    knitr,
+    rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
+VignetteBuilder: knitr
