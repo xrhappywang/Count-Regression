@@ -19,7 +19,9 @@ Imports:
     AER,
     tibble,
     patchwork,
-    DHARMa
+    DHARMa,
+    emmeans,
+    lmtest
 Suggests:
     knitr,
     rmarkdown,
